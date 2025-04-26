@@ -2,9 +2,14 @@
 #include "includes/types32.c"
 #include "includes/limits32.c"
 
+U32 shift_left_circular(const U32 x, const U32 n);
+U32 sum32(U32 x, U32 y);
+U32 sha1_f(const U32 t, const U32 B, const U32 C, const U32 D);
+U32 sha1_K(const U32 t);
 
 struct ctx_sha1m1 {
   U32 index;
+  U32 subindex;
   U32 len_low;
   U32 len_high;
   U32 hash[5];
@@ -13,43 +18,145 @@ struct ctx_sha1m1 {
 
 
 void sha1m1_init(struct ctx_sha1m1 *context) {
-  context->hash[0] = 0x67452301;
-  context->hash[1] = 0xEFCDAB89;
-  context->hash[2] = 0x98BADCFE;
-  context->hash[3] = 0x10325476;
-  context->hash[4] = 0xC3D2E1F0;
-  context->index   = 0;
+  context->hash[0]  = 0x67452301;
+  context->hash[1]  = 0xEFCDAB89;
+  context->hash[2]  = 0x98BADCFE;
+  context->hash[3]  = 0x10325476;
+  context->hash[4]  = 0xC3D2E1F0;
+  context->index    = 0;
+  context->subindex = 0;
   U32 j;
   for (j = 0; j < 80; j++)
     context->W[j] = 0;
 }
 
 
-void sha1m1_update(struct ctx_sha1m1 *context, const U8 src, const U32 srclen) {
-  assert(
-       srclen            < U32_MAX - context->len_low 
-    || context->len_high < U32_MAX,
-    "sha1m1_update: Input length is too long. It's bigger than 2^64\n"
-  );
+U32 sha1m1_read(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
+        U32 j;
+  const U32 shift[] = {24, 16, 8, 0};
 
-  U32       j, k;
-  const U32 J_LIMIT = srclen / 4;
+  if (context->subindex != 0) {
+    for (j = context->index; context->subindex < 4 && context->subindex + j < srclen; context->subindex++) {
+      context->W[j] |= src[j + context->subindex] << shift[context->subindex];
+    }
+    if (context->subindex != 4)
+      return context->index;
+    context->subindex = 0;
+    if (j == 15) {
+      /* context->index = 0; */
+      return 16;
+    }
+  }
+
+  const U32 J_LIMIT = (srclen - 3) / 4;
   for (j = 0; j < 16 && j < J_LIMIT; j++) {
     context->W[j]  = src[4 * j]     << 24;
     context->W[j] |= src[4 * j + 1] << 16;
     context->W[j] |= src[4 * j + 2] << 8;
     context->W[j] |= src[4 * j + 3];
   }
-  switch (j) {
-    case 0:
-      if (0 != srclen)
-        W[j] = src[j];
-      break;
+  context->index = j - 1;
+
+  if (j == 16)
+    return 16;
+  /*
+  if (J_LIMIT * 4 + 3 == srclen) {
+    return context->index + 1;
+  }
+  */
+
+  for (j = context->index; context->subindex < 4 && j + context->subindex < srclen; context->subindex++) {
+    context->W[j] |= src[j + context->subindex] << shift[context->subindex];
+  }
+
+  return context->index;
+}
+
+
+void sha1m1_process(struct ctx_sha1m1 *context) {
+  U32 t, A, B, C, D, E, TEMP;
+
+  for (t = 16; t < 79; t++)
+    context->W[t] = shift_left_circular(context->W[t-3] ^ context->W[t-8] ^ context->W[t-14] ^ context->W[t-16], 1);
+
+  A = context->hash[0];
+  B = context->hash[1];
+  C = context->hash[2];
+  D = context->hash[3];
+  E = context->hash[4];
+  
+  for (t = 0; t < 79; t++) {
+    TEMP = sum32(shift_left_circular(A, 5), sha1_f(t, B, C, D));
+    TEMP = sum32(TEMP, E);
+    TEMP = sum32(TEMP, context->W[t]);
+    TEMP = sum32(TEMP, sha1_K(t));
+  }
+
+  E = D;
+  D = C;
+  C = shift_left_circular(B, 30);
+  B = A;
+  A = TEMP;
+
+  context->hash[0] = sum32(context->hash[0], A);
+  context->hash[1] = sum32(context->hash[1], B);
+  context->hash[2] = sum32(context->hash[2], C);
+  context->hash[3] = sum32(context->hash[3], D);
+  context->hash[4] = sum32(context->hash[4], E);
+}
+
+
+void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
+  assert(srclen < U32_MAX - context->len_low 
+           || context->len_high < U32_MAX,
+         "sha1m1_update: Input length is too long. It's bigger than 2^64"
+  );
+
+  U32 j;
+  for (j = 0; srclen > j && sha1m1_read(context, src + j, srclen - j) == 16; j += 16) {
+    sha1m1_process(context);
+    if (U32_MAX - context->len_low < 512) {
+      context->len_high++;
+      context->len_low = 512 - (U32_MAX - context->len_low);
+    } else {
+      context->len_low += 512;
+    }
   }
 }
 
 
+void sha1m1_pad(struct ctx_sha1m1 *context) {
+  /*
+   * If there is enough space for 1 additional bit, len_low and len_high,
+   * we need 56 bytes at most
+   *
+   * If there is not enough space for 1 bit, len_low and len_high,
+   * we need 65 bytes
+  */
+  const U8 pad[65] = {
+    0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00
+  };
+
+  if (context->subindex < 3 && context->index < 13) {
+    sha1m1_read(context, pad, 64);
+    return;
+  }
+
+  sha1m1_read(context, pad, 64);
+  sha1m1_process(context);
+  sha1m1_read(context, pad + 1, 64);
+}
+
+
 void sha1m1_digest(struct ctx_sha1m1 *context) {
+  sha1m1_pad(context);
+  sha1m1_process(context);
 }
 
 
