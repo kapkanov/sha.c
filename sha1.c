@@ -2,10 +2,12 @@
 #include "includes/types32.c"
 #include "includes/limits32.c"
 
+
 U32 shift_left_circular(const U32 x, const U32 n);
 U32 sum32(U32 x, U32 y);
 U32 sha1_f(const U32 t, const U32 B, const U32 C, const U32 D);
 U32 sha1_K(const U32 t);
+
 
 struct ctx_sha1m1 {
   U32 index;
@@ -32,51 +34,54 @@ void sha1m1_init(struct ctx_sha1m1 *context) {
 
 
 U32 sha1m1_read(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
-        U32 j;
+        U32 j, J_LIMIT;
   const U32 shift[] = {24, 16, 8, 0};
 
+  j = 0;
   if (context->subindex != 0) {
-    for (j = context->index; context->subindex < 4 && context->subindex + j < srclen; context->subindex++) {
-      context->W[j] |= src[j + context->subindex] << shift[context->subindex];
+    for (; context->subindex < 4 && j < srclen; context->subindex++, j++) {
+      context->W[context->index] |= src[j] << shift[context->subindex];
     }
+
     if (context->subindex != 4)
-      return context->index;
+      return j * 8;
+
     context->subindex = 0;
-    if (j == 15) {
-      /* context->index = 0; */
-      return 16;
+    context->index++;
+  }
+
+  if (srclen > 3 + j) {
+    context->W[context->index]  = src[j]     << 24;
+    context->W[context->index] |= src[j + 1] << 16;
+    context->W[context->index] |= src[j + 2] << 8;
+    context->W[context->index] |= src[j + 3];
+
+    J_LIMIT = (srclen - 3) / 4;
+    for (j++; context->index < 16 && j < J_LIMIT; context->index++, j++) {
+      context->W[context->index]  = src[4 * j]     << 24;
+      context->W[context->index] |= src[4 * j + 1] << 16;
+      context->W[context->index] |= src[4 * j + 2] << 8;
+      context->W[context->index] |= src[4 * j + 3];
     }
   }
 
-  const U32 J_LIMIT = (srclen - 3) / 4;
-  for (j = 0; j < 16 && j < J_LIMIT; j++) {
-    context->W[j]  = src[4 * j]     << 24;
-    context->W[j] |= src[4 * j + 1] << 16;
-    context->W[j] |= src[4 * j + 2] << 8;
-    context->W[j] |= src[4 * j + 3];
-  }
-  context->index = j - 1;
-
-  if (j == 16)
-    return 16;
-  /*
-  if (J_LIMIT * 4 + 3 == srclen) {
-    return context->index + 1;
-  }
-  */
-
-  for (j = context->index; context->subindex < 4 && j + context->subindex < srclen; context->subindex++) {
-    context->W[j] |= src[j + context->subindex] << shift[context->subindex];
+  if (context->index == 16) {
+    context->index = 0;
+    return 512;
   }
 
-  return context->index;
+  for (; context->subindex < 4 && j < srclen; context->subindex++, j++) {
+    context->W[context->index] |= src[j] << shift[context->subindex];
+  }
+
+  return j * 8;
 }
 
 
 void sha1m1_process(struct ctx_sha1m1 *context) {
   U32 t, A, B, C, D, E, TEMP;
 
-  for (t = 16; t < 79; t++)
+  for (t = 16; t < 80; t++)
     context->W[t] = shift_left_circular(context->W[t-3] ^ context->W[t-8] ^ context->W[t-14] ^ context->W[t-16], 1);
 
   A = context->hash[0];
@@ -85,18 +90,18 @@ void sha1m1_process(struct ctx_sha1m1 *context) {
   D = context->hash[3];
   E = context->hash[4];
   
-  for (t = 0; t < 79; t++) {
-    TEMP = sum32(shift_left_circular(A, 5), sha1_f(t, B, C, D));
+  for (t = 0; t < 80; t++) {
+    TEMP = shift_left_circular(A, 5);
+    TEMP = sum32(TEMP, sha1_f(t, B, C, D));
     TEMP = sum32(TEMP, E);
     TEMP = sum32(TEMP, context->W[t]);
     TEMP = sum32(TEMP, sha1_K(t));
+    E = D;
+    D = C;
+    C = shift_left_circular(B, 30);
+    B = A;
+    A = TEMP;
   }
-
-  E = D;
-  D = C;
-  C = shift_left_circular(B, 30);
-  B = A;
-  A = TEMP;
 
   context->hash[0] = sum32(context->hash[0], A);
   context->hash[1] = sum32(context->hash[1], B);
@@ -113,6 +118,7 @@ void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen)
   );
 
   U32 j;
+
   for (j = 0; srclen > j && sha1m1_read(context, src + j, srclen - j) == 16; j += 16) {
     sha1m1_process(context);
     if (U32_MAX - context->len_low < 512) {
@@ -122,10 +128,20 @@ void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen)
       context->len_low += 512;
     }
   }
+
+  j = context->index * 4 * 8;
+  if (U32_MAX - context->len_low < j + context->subindex) {
+    context->len_high++;
+    context->len_low = j - (U32_MAX - context->len_low) + !!context->subindex * (context->subindex + 1) * 8;
+  } else {
+    context->len_low += j + !!context->subindex * (context->subindex + 1) * 8;
+  }
 }
 
 
 void sha1m1_pad(struct ctx_sha1m1 *context) {
+  U32 j;
+
   /*
    * If there is enough space for 1 additional bit, len_low and len_high,
    * we need 56 bytes at most
@@ -142,11 +158,30 @@ void sha1m1_pad(struct ctx_sha1m1 *context) {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00
   };
+  const U32 shift[] = {24, 16, 8, 0};
 
-  if (context->subindex < 3 && context->index < 13) {
-    sha1m1_read(context, pad, 64);
+  if (context->subindex != 0) {
+    context->W[context->index] |= 0x80 << shift[context->subindex];
+    for (context->subindex++; context->subindex < 4; context->subindex++) {
+      context->W[context->index] |= 0 << shift[context->subindex];
+    }
+    context->index++;
+  }
+
+  for (j = context->index; j < 14; j++) {
+    context->W[j] = 0;
+  }
+
+  context->W[14] = context->len_high;
+  context->W[15] = context->len_low;
+    
+  return;
+  /*
+  if (context->subindex < 4 && context->index < 13) {
+    sha1m1_read(context, pad, 16);
     return;
   }
+  */
 
   sha1m1_read(context, pad, 64);
   sha1m1_process(context);
