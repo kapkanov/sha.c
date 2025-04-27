@@ -53,7 +53,7 @@ U32 sha1m1_read(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
 
 
 void sha1m1_process(struct ctx_sha1m1 *context) {
-/*  assert(context->index == 16, "sha1m1_process: index %u != 16", context->index); */
+  assert(context->index == 16, "sha1m1_process: index %u != 16", context->index);
 
   U32 t, A, B, C, D, E, TEMP;
 
@@ -108,45 +108,33 @@ void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen)
       context->index = 0;
     }
   }
-
-  /*
-  for (j = 0; srclen > j && (len = sha1m1_read(context, src + j, srclen - j)) == 512; j += 64) {
-    sha1m1_process(context);
-    if (U32_MAX - context->len_low < 512) {
-      context->len_high++;
-      context->len_low = 512 - (U32_MAX - context->len_low);
-    } else {
-      context->len_low += 512;
-    }
-  }
-
-  if (len != 512 && U32_MAX - context->len_low < len) {
-    context->len_high++;
-    context->len_low = len - (U32_MAX - context->len_low);
-  } else {
-    context->len_low += len;
-  }
-  */
 }
 
 
 void sha1m1_pad(struct ctx_sha1m1 *context) {
-  const U8 pad[17] = {
+  const U8 pad[65] = {
     0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    0x00
   };
 
   if (context->index < 14) {
-    sha1m1_read(context, pad, 16);
+    sha1m1_read(context, pad, 64);
     context->W[14] = context->len_high;
     context->W[15] = context->len_low;
     return;
   }
 
-  sha1m1_read(context, pad, 16);
+  sha1m1_read(context, pad, 64);
   sha1m1_process(context);
   context->index = 0;
-  sha1m1_read(context, pad + 1, 16);
+  sha1m1_read(context, pad + 1, 64);
   context->W[14] = context->len_high;
   context->W[15] = context->len_low;
 }
