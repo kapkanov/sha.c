@@ -48,9 +48,16 @@ void test_sha1m1(const U8 src[], const U32 srclen, const U8 res[]) {
     printf("Test failed for %s\n", src);
 }
 
+void strcp(const U8 src[], const U32 srclen, U8 dst[]) {
+  U32 j;
+
+  for (j = 0; j < srclen; j++)
+    dst[j] = src[j];
+}
+
 I32 main(void) {
   struct ctx_sha1m1 ctx;
-  U32               j;
+  U32               j, k;
   U8                str[1000000];
 
   test_sha1m1("abc", 3, "a9993e364706816aba3e25717850c26c9cd0d89d");
@@ -58,8 +65,11 @@ I32 main(void) {
 
   for (j = 0; j < 1000000; j++)
     str[j] = 'a';
-
   test_sha1m1(str, 1000000, "34AA973CD4C4DAA4F61EEB2BDBAD27316534016F");
+
+  for (j = 0; j < 10; j++)
+    strcp("0123456701234567012345670123456701234567012345670123456701234567", 64, str + 64 * j);
+  test_sha1m1(str, 640, "DEA356A2CDDD90C7A7ECEDC5EBB563934F460452");
 
   return 0;
 }
