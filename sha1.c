@@ -9,7 +9,7 @@ U32 sha1_f(const U32 t, const U32 B, const U32 C, const U32 D);
 U32 sha1_K(const U32 t);
 
 
-struct ctx_sha1m1 {
+struct ctx_sha1 {
   U32 index;
   U32 subindex;
   U32 len_low;
@@ -19,7 +19,7 @@ struct ctx_sha1m1 {
 };
 
 
-void sha1m1_init(struct ctx_sha1m1 *context) {
+void sha1_init(struct ctx_sha1 *context) {
   context->hash[0]  = 0x67452301;
   context->hash[1]  = 0xEFCDAB89;
   context->hash[2]  = 0x98BADCFE;
@@ -35,7 +35,7 @@ void sha1m1_init(struct ctx_sha1m1 *context) {
 }
 
 
-U32 sha1m1_read(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
+U32 sha1_read(struct ctx_sha1 *context, const U8 src[], const U32 srclen) {
         U32 j;
   const U32 shift[] = {24, 16, 8, 0};
 
@@ -55,8 +55,8 @@ U32 sha1m1_read(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
 }
 
 
-void sha1m1_process(struct ctx_sha1m1 *context) {
-  assert(context->index == 16, "sha1m1_process: index %u != 16", context->index);
+void sha1_process(struct ctx_sha1 *context) {
+  assert(context->index == 16, "sha1_process: index %u != 16", context->index);
 
   U32 t, A, B, C, D, E, TEMP;
 
@@ -90,16 +90,16 @@ void sha1m1_process(struct ctx_sha1m1 *context) {
 }
 
 
-void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
+void sha1_update(struct ctx_sha1 *context, const U8 src[], const U32 srclen) {
   assert(srclen < U32_MAX - context->len_low 
            || context->len_high < U32_MAX,
-         "sha1m1_update: Input length is too long. It's bigger than 2^64"
+         "sha1_update: Input length is too long. It's bigger than 2^64"
   );
 
   U32 j, len;
 
   for (j = 0; j < srclen; j += 64) {
-    len = sha1m1_read(context, src + j, srclen - j);
+    len = sha1_read(context, src + j, srclen - j);
     if (U32_MAX - context->len_low < len) {
       context->len_high++;
       context->len_low = len - (U32_MAX - context->len_low);
@@ -107,14 +107,14 @@ void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen)
       context->len_low += len;
     }
     if (context->index == 16) {
-      sha1m1_process(context);
+      sha1_process(context);
       context->index = 0;
     }
   }
 }
 
 
-void sha1m1_pad(struct ctx_sha1m1 *context) {
+void sha1_pad(struct ctx_sha1 *context) {
   const U8 pad[65] = {
     0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -128,24 +128,24 @@ void sha1m1_pad(struct ctx_sha1m1 *context) {
   };
 
   if (context->index < 14) {
-    sha1m1_read(context, pad, 64);
+    sha1_read(context, pad, 64);
     context->W[14] = context->len_high;
     context->W[15] = context->len_low;
     return;
   }
 
-  sha1m1_read(context, pad, 64);
-  sha1m1_process(context);
+  sha1_read(context, pad, 64);
+  sha1_process(context);
   context->index = 0;
-  sha1m1_read(context, pad + 1, 64);
+  sha1_read(context, pad + 1, 64);
   context->W[14] = context->len_high;
   context->W[15] = context->len_low;
 }
 
 
-void sha1m1_digest(struct ctx_sha1m1 *context) {
-  sha1m1_pad(context);
-  sha1m1_process(context);
+void sha1_digest(struct ctx_sha1 *context) {
+  sha1_pad(context);
+  sha1_process(context);
 }
 
 

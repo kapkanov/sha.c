@@ -27,14 +27,14 @@ U32 *str2hash(const U8 src[]) {
 }
 
 void test_sha1m1(const U8 src[], const U32 srclen, const U8 res[]) {
-  struct ctx_sha1m1 ctx;
-  U32               j;
+  struct ctx_sha1 ctx;
+  U32             j;
 
   str2hash(res);
 
-  sha1m1_init(&ctx);
-  sha1m1_update(&ctx, src, srclen);
-  sha1m1_digest(&ctx);
+  sha1_init(&ctx);
+  sha1_update(&ctx, src, srclen);
+  sha1_digest(&ctx);
 
   for (j = 0; j < 5 && ctx.hash[j] == hash[j]; j++);
 
@@ -56,9 +56,9 @@ void strcp(const U8 src[], const U32 srclen, U8 dst[]) {
 }
 
 I32 main(void) {
-  struct ctx_sha1m1 ctx;
-  U32               j, k;
-  U8                str[1000000];
+  struct ctx_sha1 ctx;
+  U32             j, k;
+  U8              str[1000000];
 
   test_sha1m1("abc", 3, "a9993e364706816aba3e25717850c26c9cd0d89d");
   test_sha1m1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 56, "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
