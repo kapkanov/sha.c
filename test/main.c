@@ -28,22 +28,38 @@ U32 *str2hash(const U8 src[]) {
 
 void test_sha1m1(const U8 src[], const U32 srclen, const U8 res[]) {
   struct ctx_sha1m1 ctx;
-  U32 j;
+  U32               j;
+
+  str2hash(res);
+
   sha1m1_init(&ctx);
   sha1m1_update(&ctx, src, srclen);
   sha1m1_digest(&ctx);
-  str2hash(res);
+
   for (j = 0; j < 5 && ctx.hash[j] == hash[j]; j++);
+
+  if (srclen > 20) {
+    if (j != 5)
+      printf("Test failed for %.20s...\n", src);
+    return;
+  }
+
   if (j != 5)
     printf("Test failed for %s\n", src);
 }
 
 I32 main(void) {
   struct ctx_sha1m1 ctx;
-  U32 j;
+  U32               j;
+  U8                str[1000000];
 
   test_sha1m1("abc", 3, "a9993e364706816aba3e25717850c26c9cd0d89d");
   test_sha1m1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 56, "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
+
+  for (j = 0; j < 1000000; j++)
+    str[j] = 'a';
+
+  test_sha1m1(str, 1000000, "34AA973CD4C4DAA4F61EEB2BDBAD27316534016F");
 
   return 0;
 }
