@@ -65,12 +65,7 @@ U32 sha1m1_read(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
     }
   }
 
-  if (context->index == 16) {
-    context->index = 0;
-    return 512;
-  }
-
-  for (; context->subindex < 4 && j < srclen; context->subindex++, j++) {
+  for (; context->index < 16 && context->subindex < 4 && j < srclen; context->subindex++, j++) {
     context->W[context->index] |= src[j] << shift[context->subindex];
   }
 
@@ -117,9 +112,9 @@ void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen)
          "sha1m1_update: Input length is too long. It's bigger than 2^64"
   );
 
-  U32 j;
+  U32 j, len;
 
-  for (j = 0; srclen > j && sha1m1_read(context, src + j, srclen - j) == 16; j += 16) {
+  for (j = 0; srclen > j && (len = sha1m1_read(context, src + j, srclen - j)) == 512; j += 64) {
     sha1m1_process(context);
     if (U32_MAX - context->len_low < 512) {
       context->len_high++;
@@ -129,12 +124,11 @@ void sha1m1_update(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen)
     }
   }
 
-  j = context->index * 4 * 8;
-  if (U32_MAX - context->len_low < j + context->subindex) {
+  if (U32_MAX - context->len_low < len) {
     context->len_high++;
-    context->len_low = j - (U32_MAX - context->len_low) + !!context->subindex * (context->subindex + 1) * 8;
+    context->len_low = len - (U32_MAX - context->len_low);
   } else {
-    context->len_low += j + !!context->subindex * (context->subindex + 1) * 8;
+    context->len_low += len;
   }
 }
 
