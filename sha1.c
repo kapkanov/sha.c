@@ -39,6 +39,9 @@ U32 sha1m1_read(struct ctx_sha1m1 *context, const U8 src[], const U32 srclen) {
         U32 j;
   const U32 shift[] = {24, 16, 8, 0};
 
+  for (j = 0; j < 16 && context->index == 0 && context->subindex == 0; j++)
+    context->W[j] = 0;
+
   for (j = 0; j < srclen && context->index < 16;) {
     for (; j < srclen && context->subindex < 4; j++, context->subindex++)
       context->W[context->index] |= src[j] << shift[context->subindex];
