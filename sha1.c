@@ -169,9 +169,9 @@ U32 sha1_read(struct ctx_sha1 *context, const U8 src[], const U32 srclen) {
 
 
 void sha1_process(struct ctx_sha1 *context) {
-  assert(context->index == 16, "sha1_process: index %u != 16", context->index);
-
   U32 t, A, B, C, D, E, TEMP;
+
+  assert(context->index == 16, "sha1_process: index %u != 16. There are not enough words to process a hash", context->index);
 
   for (t = 16; t < 80; t++)
     context->W[t] = shift_left_circular(context->W[t-3] ^ context->W[t-8] ^ context->W[t-14] ^ context->W[t-16], 1);
@@ -204,12 +204,13 @@ void sha1_process(struct ctx_sha1 *context) {
 
 
 void sha1_update(struct ctx_sha1 *context, const U8 src[], const U32 srclen) {
+  U32 j, len;
+
   assert(srclen < U32_MAX - context->len_low 
            || context->len_high < U32_MAX,
          "sha1_update: Input length is too long. It's bigger than 2^64"
   );
 
-  U32 j, len;
 
   for (j = 0; j < srclen; j += 64) {
     len = sha1_read(context, src + j, srclen - j);
@@ -291,6 +292,8 @@ U32 sha1_K(const U32 t) {
     return 0xCA62C1D6;
 }
 
+#ifndef SUM32_C
+#define SUM32_C
 
 U32 sum32(U32 x, U32 y) {
 /*
@@ -345,4 +348,6 @@ void assert_sum32(void) {
   assert(1 == sum32(U32_MAX, 2), "sum32(U32_MAX, 2) != 1");
   assert(U32_MAX - 1 == sum32(U32_MAX, U32_MAX), "sum32(U32_MAX, U32_MAX) != U32_MAX - 1");
 }
+
+#endif
 
