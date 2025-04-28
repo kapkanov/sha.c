@@ -1,10 +1,13 @@
-#include "../includes/types32.c"
 #include "../sha1.c"
 #include <stdio.h>
 
 U32 hash[5];
 
 U32 *str2hash(const U8 src[]) {
+  assert_types32();
+  assert_limits32();
+  assert_sum32();
+
   U32 j, k, m;
   U8  table[103];
 
@@ -60,6 +63,7 @@ I32 main(void) {
   U32             j, k;
   U8              str[1000000];
 
+  test_sha1m1("", 0, "da39a3ee5e6b4b0d3255bfef95601890afd80709");
   test_sha1m1("abc", 3, "a9993e364706816aba3e25717850c26c9cd0d89d");
   test_sha1m1("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", 56, "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
 
